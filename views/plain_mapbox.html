@@ -1,0 +1,303 @@
+<html>
+<head>
+  <title>A Mapbox map!</title>
+
+  <script src='http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script>
+  <script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.10.4/jquery-ui.min.js'></script>
+  <!-- Mapbox GL -->
+  <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.37.0/mapbox-gl.css' rel='stylesheet' />
+  <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.37.0/mapbox-gl.js'></script>
+
+  <style>
+    #features {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 300px;
+      overflow: auto;
+      background: rgba(255, 255, 255, 0.9);
+  }
+    
+    #map{ height: 100% }
+    #map canvas {
+        cursor: crosshair;
+    }
+
+  </style>
+</head>
+<body>
+<style>
+    #menu {
+        background: #fff;
+        position: absolute;
+        z-index: 1;
+        top: 10px;
+        right: 10px;
+        border-radius: 3px;
+        width: 120px;
+        border: 1px solid rgba(0,0,0,0.4);
+        font-family: 'Open Sans', sans-serif;
+    }
+
+    #menu a {
+        font-size: 13px;
+        color: #404040;
+        display: block;
+        margin: 0;
+        padding: 0;
+        padding: 10px;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(0,0,0,0.25);
+        text-align: center;
+    }
+
+    #menu a:last-child {
+        border: none;
+    }
+
+    #menu a:hover {
+        background-color: #f8f8f8;
+        color: #404040;
+    }
+
+    #menu a.active {
+        background-color: #3887be;
+        color: #ffffff;
+    }
+
+    #menu a.active:hover {
+        background: #3074a4;
+    }
+</style>
+  <nav id="menu"></nav>
+  <div id="map"></div>
+  #<pre id='features'></pre>
+  <script>
+  mapboxgl.accessToken = 'pk.eyJ1IjoiY2VjZTE5IiwiYSI6ImNpaHBvNTBnZjA0NHZ0Nm00bGJoMDAxdDkifQ.Nj2-Tx6bRcpoliPuSqAGHw';
+
+  // initialize the map
+  var map = new mapboxgl.Map({
+    container: 'map', // container id
+    style: 'mapbox://styles/mapbox/light-v9', //hosted style id
+    center: [-122.30, 37.85], // starting position
+    zoom: 11 // starting zoom
+  });
+
+  var major_line_layer = null;
+  var line_layer = null;
+  var goAjax = null;
+  var goAjax2 = null;
+  var zoneAjax = null;
+  var streets = 'roads_all';
+  var gl;
+  var layers = [];
+  var layerGroup = null;
+  
+  var roads_data = null;
+  var zoom_grids={
+	//"0":{"table": 'national_priority0',"cols":1,"rows":1, "layerid":streets},
+	"1":{"table": 'national_priority1',"cols":8,"rows":4, "layerid":streets},
+	"2":{"table": 'national_priority2',"cols":24,"rows":10, "layerid":streets},
+	"3":{"table": 'national_priority3',"cols":50,"rows":20,"layerid":streets},
+	"4":{"table": 'national_priority4',"cols":150,"rows":60,"layerid":streets},
+	"5":{"table": 'national_all',"cols":450,"rows":180,"layerid":streets}
+  };
+  
+ 
+  var empty_json = {
+		  "type": "Feature",
+		  "geometry": {
+			"type": "Point",
+			"coordinates": [0, 0]
+		  },
+		  "properties": {
+			"name": "Empty",
+			"func_class": 1	
+		  }
+		};
+  function add_layer_styling(id){
+	map.addSource(id, {
+			"type":"geojson",
+			"data":empty_json
+		  });
+	map.addLayer({'id': 'func5', 'type':'line', 'source':id, paint:{"line-color":"SkyBlue", 'line-width':0.7}
+		,'filter':['all', ['==', 'func_class',5]]});
+	map.addLayer({'id': 'func4', 'type':'line', 'source':id, paint:{"line-color":"SkyBlue", 'line-width':1.5}
+		,'filter':['all', ['==', 'func_class',4]]});
+	map.addLayer({'id': 'func3', 'type':'line', 'source':id, paint:{"line-color":"DeepSkyBlue", 'line-width':3}
+		,'filter':['all', ['==', 'func_class',3]]});
+	map.addLayer({'id': "func2", 'type':'line', 'source':id, paint:{"line-color":"SlateBlue", 'line-width':5}
+		,'filter':['all', ['==', 'func_class',2]]});
+	map.addLayer({'id': "func1", 'type':'line', 'source':id, paint:{"line-color":"SlateBlue", 'line-width':5}
+		,'filter':['all', ['==', 'func_class',1]]});
+	map.addLayer({'id': "tollway", 'type':'line', 'source':id, paint:{"line-color":"Salmon", 'line-width':5}
+		,'filter':['all', ['==', 'tollway',1]]});
+  map.addLayer({'id': "highlighted", 'type':'line', 'source':id, paint:{"line-color":"Black", 'line-width':5}
+    ,'filter':["in","link_id",""]});
+  };
+  
+  function init_map(){
+		add_layer_styling(streets);
+  };
+  
+  map.on('load', function(){
+	var data={
+            "xmin":map.getBounds()._sw.lng,
+            "ymin":map.getBounds()._sw.lat,
+            "xmax":map.getBounds()._ne.lng,
+            "ymax":map.getBounds()._ne.lat
+        };
+	  init_map();
+	  refreshmap();
+	
+  });
+  
+  function get_zoom_grid(){
+	var zoom = map.getZoom();
+	//if(zoom <=9) {return zoom_grids[0]};
+	if(zoom <=10) {return zoom_grids[1]};
+	if(zoom <=11) {return zoom_grids[2]};
+	if(zoom <=12) {return zoom_grids[3]};
+	if(zoom <=14) {return zoom_grids[4]};
+	return zoom_grids[5];
+  };
+
+
+  
+
+  
+  map.on('moveend',function(e){
+	refreshmap();
+  });
+  
+  function refreshmap()
+  {
+	if (map.getZoom()<=9) {
+		map.getSource(streets).setData(empty_json);
+		return;
+		};
+	var zoom_grid = get_zoom_grid();
+	var data={
+            "xmin":map.getBounds()._sw.lng,
+            "ymin":map.getBounds()._sw.lat,
+            "xmax":map.getBounds()._ne.lng,
+            "ymax":map.getBounds()._ne.lat,
+			"table": zoom_grid.table,
+			"cols":zoom_grid.cols,
+			"rows":zoom_grid.rows
+        };
+	
+	url = "/refreshmap";
+	
+	if(goAjax !== null) {goAjax.abort(); goAjax=null;};
+	goAjax = $.ajax({url:url, type:'POST',data: data, dataType: 'json' });
+	$.when(goAjax).done(function(data){   
+      console.log('yeah');
+      //console.log(data);
+	  if (roads_data !== null) roads_data=null;
+	  map.getSource(streets).setData(data);
+    });
+  
+  };
+
+  map.on('click',function(e){
+    var data={
+            "xmin":map.getBounds()._sw.lng,
+            "ymin":map.getBounds()._sw.lat,
+            "xmax":map.getBounds()._ne.lng,
+            "ymax":map.getBounds()._ne.lat
+        };
+    var bbox = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+    
+    var toggleableLayerIds = ['func1','func2','func3','func4','func5'];
+  
+    for (var i = 0; i < toggleableLayerIds.length; i++) {
+      var layerid = toggleableLayerIds[i];
+      var features = map.queryRenderedFeatures(bbox, { layers: [layerid] });
+
+
+
+      var filter = features.reduce(function(memo, feature) {
+            memo.push(feature.properties.link_id);
+            return memo;
+        }, ['in', 'link_id']);
+      map.setFilter("highlighted", filter);
+
+      //console.log(features);
+      //console.log(features.length);
+
+      if (features.length>0)
+      {
+        var completehtml=""
+        var featurelist=[];
+        for (var j = 0; j < features.length; j++) 
+        {
+            var feature=features[j];
+
+
+            if (feature)
+            {
+
+            var index=j+1
+            var html="<p><label >"+index+". LINK ID: "+feature.properties.link_id+"</label></p>"
+                  +"<p><label >AID: "+feature.properties.a_id+"    BID: "+feature.properties.b_id+"</label></p>"
+                  +"<p><label >Functional Class: "+feature.properties.func_class+"</label></p>"
+                  +"<p><label >Direction: <font color='red'><b>  "+feature.properties.direction+ "</b></font></label></p>"
+                            +"<p><label for='tollInput'>Toll（$）: </label><input type='number' id='tollid"+j+"'></p>"
+                            //+"<p><label id='status"+j+"'>  </label></p>"
+                            +"<input type='submit' class='btn btn-primary btn-lg' id='dataSaveEdit_"+j+"' value='SAVE'><label id='status"+j+"'>  </label>";  
+            
+            completehtml=completehtml+html;
+
+            };
+          };
+
+          document.getElementById('features').innerHTML =completehtml;
+          for (var j = 0; j < features.length; j++) {
+            document.getElementById("dataSaveEdit_"+j).onclick = function() {SaveData(features,this.id)};
+
+          }
+          break;
+        };    
+    };
+  });
+
+  function SaveData(features,id){  
+
+    var goAjax=null;
+
+    var j=id.split("_")[1]; 
+
+    feature=features[j]
+    var toll= document.getElementById("tollid"+j).value; 
+    //console.log(toll);
+    var aid=feature.properties.a_id;
+    var bid=feature.properties.b_id;
+    var data={
+      "aid":aid,
+      "bid":bid,
+      "toll":toll
+    };
+
+    var url = "/updatelink";
+
+    goAjax = $.ajax({url:url, type:'POST',data: data, dataType: 'json'});
+    $.when(goAjax).done(function(data){
+        //console.log(data.rows[0]['addtoll']);
+        //var returnStatus;
+        if (data.rows[0]['addtoll']==0) {
+          console.log("Toll Updated Successfully!");
+          document.getElementById("status"+j).innerHTML = "<font color='green'>   Updated Successfully!</font>";
+        } else{
+          console.log("Error!");
+          document.getElementById("status"+j).innerHTML = "<font color='red'>    Errors!</font>";
+
+        };
+        });
+
+        };
+
+  </script>
+</body>
+</html>

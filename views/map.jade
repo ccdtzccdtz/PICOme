@@ -1,0 +1,187 @@
+extends layout
+block content
+    #leg_title
+        span#leg_items Center Point
+    #leg
+        each layer, i in layers
+            input(type='editbox' id='lat')
+            input(type='editbox' id='lon')
+            input(type='editbox' id='zoom')
+            
+            br
+    #map
+    //#leg_title
+    //    span#leg_items Map Legend
+    //#leg
+    //    each layer, i in layers
+    //        input(type='checkbox' onclick='toggle_layer("#{layer.lname}")' id='#{layer.lname}')
+    //        span#leg_items #{layer.lname}
+    //        br
+    script(type='text/javascript').
+        
+        var osm = new ol.layer.Tile({source: new ol.source.OSM()})
+        var img = new ol.layer.Tile({
+            title: "Global Imagery",
+            source: new ol.source.TileWMS({
+              url: 'http://maps.opengeo.org/geowebcache/service/wms',
+              params: {LAYERS: 'bluemarble', VERSION: '1.1.1'}
+            })
+          })
+        var map = new ol.Map({
+            layers: [osm],
+            target: 'map',
+            controls: ol.control.defaults().extend([
+                new ol.control.ScaleLine({className: 'ol-scale-line', target: document.getElementById('scale-line')})
+            ]),
+            view: new ol.View({
+                center: ol.proj.transform([#{lng}, #{lat}], 'EPSG:4326', 'EPSG:3857'), zoom: 16
+            })
+        });
+
+        var zoom = map.getView().getZoom();
+        console.log("zoom = " + zoom);
+        
+        function populate(){
+            var extent = map.getView().calculateExtent(map.getSize());
+            var func_level = 4;
+            extent = ol.proj.transformExtent(extent, 'EPSG:3857', 'EPSG:4326');
+            var data={
+                "xmin":extent[0],
+                "ymin":extent[1],
+                "xmax":extent[2],
+                "ymax":extent[3],
+                "func_level":func_level
+            }
+            console.log(data)
+
+                $.ajax({
+                    url : 'pg/lines',
+                    type: 'PUT',
+                    data: data,
+                    dataType: 'json',
+                    //contentType:'application/json',
+                    xhrFields: {
+                        withCredentials: false
+                    },  
+                    headers: {
+
+                    },                     
+                    success: function(data)
+                        {
+                           console.log(func_level)
+                           //var json_obj=data
+                           //console.log("yes");
+                            //var layer = addLayer('IL',data);
+                            //layer.setVisible(true)
+                            updateLayer('lines', data)
+
+                        },
+                    error: function (data)
+                    {
+                    console.log("no");
+                    }
+                });
+
+
+
+            
+
+
+        }
+
+
+
+        function toggle_layer(lname) {
+            var layer = addLayer(lname);
+            layer.setVisible(!layer.getVisible());
+        }
+
+        function addLayer(lname) {
+            var layer = addLayer.cache[lname];
+            if (true) {
+                layer = new ol.layer.Vector({
+                    source: new ol.source.Vector({
+                        features:(new ol.format.GeoJSON().readFeatures(data,{featureProjection: 'EPSG:3857'}))
+                        
+                    }),
+                    style: addStyle(lname),
+                    name: lname,
+                    visible: false
+                });
+                console.log('success add empty layer!')
+                addLayer.cache[lname] = layer;
+                map.addLayer(layer);
+            }
+            return layer;
+        }
+
+        function updateLayer(lname, data) {
+            var layer = addLayer.cache[lname];
+            if ( 1 > 0) {
+                layer = new ol.layer.Vector({
+                    source: new ol.source.Vector({
+                        features:(new ol.format.GeoJSON()).readFeatures(data,{featureProjection: 'EPSG:3857'})
+                        
+                    }),
+                    style: addStyle(lname),
+                    name: lname,
+                    visible: false
+                });
+                addLayer.cache[lname] = layer;
+                map.addLayer(layer);
+                layer.setVisible(true)
+            }
+            return layer;
+        }
+        addLayer.cache = {};
+
+
+        function addStyle(lname) {
+            switch (lname) {
+                case "points":
+                    return new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 10,
+                            fill: new ol.style.Fill({color: 'rgba(254,165,83,1)'}),
+                            stroke: new ol.style.Stroke({color: 'rgba(254,127,14,1)', width: 3})
+                        })
+                    })
+                    break;
+                case "lines":
+                    return new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                        color: 'rgba(254,62,150,0.8)',
+                    	width: 1
+                    })
+                })
+                break;
+                case "polygons":
+                    return new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                        color: 'rgba(31,119,180,1)',
+                        width: 3
+                    }),
+                    fill: new ol.style.Fill({
+                        color: 'rgba(57,155,221,0.6)'
+                    })
+                })
+                break;
+            }
+        }
+
+        map.on('click', function(evt) {
+            displayFeatureInfo(evt.pixel);
+        });
+
+        map.on('moveend',function(eve){
+            populate();
+        });
+
+        var displayFeatureInfo = function(pixel) {
+            var feature = map.forEachFeatureAtPixel(pixel, function(feature, layer) {
+                return feature;
+            });
+            if (feature) {
+                alert(feature.get('lname'));
+            } 
+        };

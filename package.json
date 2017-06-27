@@ -1,0 +1,24 @@
+{
+  "name": "pg-node",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ./bin/www"
+    
+  },
+  "dependencies": {
+    "body-parser": "~1.17.1",
+    "cookie-parser": "~1.4.3",
+    "debug": "~2.6.3",
+    "express": "~4.15.2",
+    "geojson-vt": "^2.4.0",
+    "jade": "~1.11.0",
+    "leaflet": "^1.0.3",
+    "leaflet-tilelayer-geojson": "^1.0.4",
+    "morgan": "~1.8.1",
+    "pg": "*",
+    "postgeo": "*",
+    "rbush": "^2.0.1",
+    "serve-favicon": "~2.4.2"
+  }
+}
